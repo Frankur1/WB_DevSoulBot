@@ -13,9 +13,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # ===============================
 # ⚙️ НАСТРОЙКИ
 # ===============================
-BOT_TOKEN = "8409952048:AAGeOpr8A9PKqxeo0QDHBLR6X3GZqSVZtDI"        # 👉 Впиши сюда токен бота от BotFather
-ADMIN_ID = 712270836                # 👉 Твой Telegram ID
-CHAT_ID = -4704627564                   # 👉 ID общего чата (временно оставь заглушку, потом подставишь реальный ID)
+BOT_TOKEN = "8409952048:AAGeOpr8A9PKqxeo0QDHBLR6X3GZqSVZtDI"        # 👉 Токен бота
+ADMIN_ID = 712270836                                                 # 👉 Твой Telegram ID
+CHAT_ID = -4704627564                                                # 👉 ID общего чата
 
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
@@ -98,26 +98,41 @@ async def show_admin_panel(message: types.Message):
     await message.answer("⚙️ Админ-панель управления:", reply_markup=admin_keyboard())
 
 # ===============================
-# ➕ ДОБАВЛЕНИЕ ДР
+# ➕ ДОБАВЛЕНИЕ ДР (только в личке)
 # ===============================
 @dp.callback_query(F.data == "add_bday")
 async def start_add_bday(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         return
-    await callback.message.answer("Введите @username и дату в формате ДД.ММ\n\nПример: <code>@FrankMills 15.04</code>")
+    await callback.message.answer(
+        "Введите @username и дату в формате ДД.ММ\n\nПример: <code>@FrankMills 15.04</code>"
+    )
     await callback.answer()
-    dp.message.register(process_add_bday)
+
+    # ✅ слушаем только личные сообщения от админа
+    dp.message.register(process_add_bday, F.chat.type == "private", F.from_user.id == ADMIN_ID)
 
 async def process_add_bday(message: types.Message):
+    # 🛡 На всякий случай блокируем групповые чаты
+    if message.chat.type != "private":
+        return
+
     try:
         username, date = message.text.split()
         data = load_json(BIRTHDAYS_FILE)
+
         if any(u["username"] == username for u in data):
             await message.answer("⚠️ Такой пользователь уже есть в списке.")
             return
+
         data.append({"username": username, "date": date})
         save_json(BIRTHDAYS_FILE, data)
+
         await message.answer(f"✅ Добавлено: {username} — {date}", reply_markup=admin_keyboard())
+
+        # 🧹 После добавления — отключаем этот хендлер, чтобы не копился
+        dp.message.unregister(process_add_bday)
+
     except Exception:
         await message.answer("❌ Неверный формат. Используй: <code>@username 15.04</code>")
 
