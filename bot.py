@@ -155,17 +155,29 @@ async def process_add_bday(message: types.Message):
     dp.message.handlers.clear()
 
 # ===============================
-# 📋 СПИСОК ДР
+# 📋 СПИСОК ДР (сортировка по дате)
 # ===============================
 @dp.callback_query(F.data == "list_bday")
 async def list_bdays(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         return
+
     data = load_json(BIRTHDAYS_FILE)
     if not data:
         await callback.message.answer("📭 Список пуст.")
         return
-    text = "\n".join([f"{u['username']} — {u['date']}" for u in data])
+
+    # 🔢 сортировка по месяцу и дню
+    def sort_key(u):
+        try:
+            day, month = map(int, u["date"].split("."))
+            return (month, day)
+        except Exception:
+            return (99, 99)  # если вдруг неправильный формат
+
+    data_sorted = sorted(data, key=sort_key)
+
+    text = "\n".join([f"{u['date']} — {u['username']}" for u in data_sorted])
     await callback.message.answer(f"🎂 Список дней рождения:\n\n{text}", reply_markup=admin_keyboard())
     await callback.answer()
 
