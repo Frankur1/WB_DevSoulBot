@@ -1,6 +1,7 @@
 import json
 import random
 import asyncio
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -105,36 +106,55 @@ async def start_add_bday(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         return
     await callback.message.answer(
-        "Введите @username и дату в формате ДД.ММ\n\nПример: <code>@FrankMills 15.04</code>"
+        "Введите список пользователей и даты в формате:\n\n"
+        "<code>@username — 15.04</code>\nили несколько строк сразу:\n\n"
+        "<code>@user1 — 01.01\n@user2 — 02.02</code>"
     )
     await callback.answer()
 
     # ✅ слушаем только личные сообщения от админа
     dp.message.register(process_add_bday, F.chat.type == "private", F.from_user.id == ADMIN_ID)
 
+
 async def process_add_bday(message: types.Message):
     # 🛡 На всякий случай блокируем групповые чаты
     if message.chat.type != "private":
         return
 
-    try:
-        username, date = message.text.split()
-        data = load_json(BIRTHDAYS_FILE)
+    text = message.text.strip()
+    data = load_json(BIRTHDAYS_FILE)
+    added = []
+    errors = []
 
+    # регулярка для поиска строк вида "@user — 15.04" или "@user - 15.04"
+    pattern = re.compile(r"@(\w+)\s*[—\-]\s*(\d{2}\.\d{2})")
+
+    matches = pattern.findall(text)
+
+    if not matches:
+        await message.answer("❌ Неверный формат. Используй: <code>@username — 15.04</code>")
+        return
+
+    for username, date in matches:
+        username = "@" + username
         if any(u["username"] == username for u in data):
-            await message.answer("⚠️ Такой пользователь уже есть в списке.")
-            return
-
+            errors.append(username)
+            continue
         data.append({"username": username, "date": date})
-        save_json(BIRTHDAYS_FILE, data)
+        added.append(f"{username} — {date}")
 
-        await message.answer(f"✅ Добавлено: {username} — {date}", reply_markup=admin_keyboard())
+    save_json(BIRTHDAYS_FILE, data)
 
-        # 🧹 После добавления — отключаем этот хендлер, чтобы не копился
-        dp.message.unregister(process_add_bday)
+    reply = ""
+    if added:
+        reply += "✅ Добавлены:\n" + "\n".join(added)
+    if errors:
+        reply += "\n\n⚠️ Уже были в списке:\n" + "\n".join(errors)
 
-    except Exception:
-        await message.answer("❌ Неверный формат. Используй: <code>@username 15.04</code>")
+    await message.answer(reply.strip(), reply_markup=admin_keyboard())
+
+    # 🧹 После добавления — отключаем этот хендлер, чтобы не копился
+    dp.message.unregister(process_add_bday)
 
 # ===============================
 # 📋 СПИСОК ДР
