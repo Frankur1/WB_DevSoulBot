@@ -117,7 +117,6 @@ async def start_add_bday(callback: types.CallbackQuery):
 
 
 async def process_add_bday(message: types.Message):
-    # 🛡 На всякий случай блокируем групповые чаты
     if message.chat.type != "private":
         return
 
@@ -126,9 +125,8 @@ async def process_add_bday(message: types.Message):
     added = []
     errors = []
 
-    # регулярка для поиска строк вида "@user — 15.04" или "@user - 15.04"
+    # регулярка: ищет @username — 15.04 (с тире и длинным тире)
     pattern = re.compile(r"@(\w+)\s*[—\-]\s*(\d{2}\.\d{2})")
-
     matches = pattern.findall(text)
 
     if not matches:
@@ -153,8 +151,8 @@ async def process_add_bday(message: types.Message):
 
     await message.answer(reply.strip(), reply_markup=admin_keyboard())
 
-    # 🧹 После добавления — отключаем этот хендлер, чтобы не копился
-    dp.message.unregister(process_add_bday)
+    # 🧹 очищаем временные хендлеры, чтобы не копились
+    dp.message.handlers.clear()
 
 # ===============================
 # 📋 СПИСОК ДР
